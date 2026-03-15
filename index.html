@@ -7,7 +7,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #111;
+      background: #000;
       overflow: hidden;
       display: flex;
       justify-content: center;
@@ -15,36 +15,96 @@
       height: 100vh;
       font-family: 'Segoe UI', system-ui, sans-serif;
     }
-    canvas { display: block; image-rendering: pixelated; }
-    #ui-overlay {
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    /* GTA-style HUD */
+    #hud-top-right {
       position: fixed;
-      top: 0; left: 0; right: 0;
+      top: 12px; right: 16px;
+      text-align: right;
       pointer-events: none;
       z-index: 10;
     }
-    #hud {
-      padding: 12px 16px;
-      display: flex;
-      justify-content: space-between;
-      color: #fff;
-      font-size: 14px;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    #hud-money {
+      color: #6adf6a;
+      font-size: 26px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      font-family: 'Courier New', monospace;
     }
+    #hud-wanted {
+      color: #fff;
+      font-size: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      margin-top: 4px;
+      letter-spacing: 4px;
+    }
+    #hud-bars {
+      position: fixed;
+      top: 12px; left: 16px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .hud-bar {
+      width: 200px;
+      height: 14px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.15);
+      margin-bottom: 4px;
+      position: relative;
+    }
+    .hud-bar-fill {
+      height: 100%;
+      transition: width 0.3s;
+    }
+    #health-fill { background: #d44; width: 100%; }
+    #armor-fill { background: #49f; width: 0%; }
+    .hud-bar-label {
+      position: absolute;
+      top: 0; left: 6px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.7);
+      line-height: 14px;
+      text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
+    }
+
+    #hud-vehicle {
+      position: fixed;
+      bottom: 180px; left: 16px;
+      color: #fff;
+      font-size: 13px;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+      pointer-events: none;
+      z-index: 10;
+    }
+    #hud-speed {
+      font-size: 24px;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+    }
+
     #mission-tracker {
       position: fixed;
-      top: 50px; right: 16px;
+      top: 80px; right: 16px;
       color: #ffd700;
       font-size: 13px;
       text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
       pointer-events: none;
       z-index: 10;
       max-width: 250px;
+      background: rgba(0,0,0,0.3);
+      padding: 8px 12px;
+      border-radius: 4px;
     }
+    #mission-tracker:empty {
+      display: none;
+    }
+
     #marketplace-panel {
       position: fixed;
       top: 0; right: 0; bottom: 0;
       width: 360px;
-      background: rgba(20, 20, 30, 0.95);
+      background: rgba(10, 10, 15, 0.95);
       border-left: 2px solid #333;
       color: #eee;
       z-index: 20;
@@ -77,8 +137,16 @@
       position: fixed;
       bottom: 12px; left: 50%;
       transform: translateX(-50%);
-      color: #666;
-      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      font-size: 11px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #hud-fps {
+      position: fixed;
+      bottom: 12px; right: 16px;
+      color: rgba(255,255,255,0.3);
+      font-size: 11px;
       pointer-events: none;
       z-index: 10;
     }
@@ -86,18 +154,26 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="ui-overlay">
-    <div id="hud">
-      <span id="hud-pos">X: 0  Y: 0</span>
-      <span id="hud-fps">FPS: 0</span>
-    </div>
+
+  <!-- GTA-style HUD -->
+  <div id="hud-bars">
+    <div class="hud-bar"><div id="health-fill" class="hud-bar-fill"></div><span class="hud-bar-label">HEALTH</span></div>
+    <div class="hud-bar"><div id="armor-fill" class="hud-bar-fill"></div><span class="hud-bar-label">ARMOR</span></div>
   </div>
+  <div id="hud-top-right">
+    <div id="hud-money">$0</div>
+    <div id="hud-wanted"></div>
+  </div>
+  <div id="hud-vehicle"></div>
+
   <div id="mission-tracker"></div>
   <div id="marketplace-panel">
     <h2>Marketplace</h2>
     <div id="mp-list"></div>
   </div>
-  <div id="controls-hint">WASD move · E interact · M marketplace · ESC close</div>
+  <div id="controls-hint">WASD move · F enter/exit car · E interact · T ai creator · M marketplace</div>
+  <div id="hud-fps">FPS: 0</div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
