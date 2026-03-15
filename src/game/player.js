@@ -1,4 +1,4 @@
-// Player entity — WASD movement with physics
+// Player entity — first-person movement with angle
 import { isKeyDown } from '../engine/input.js';
 import { applyVelocity, applyFriction } from '../engine/physics.js';
 
@@ -6,41 +6,49 @@ export class Player {
   constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.w = 28;
-    this.h = 28;
+    this.w = 20;
+    this.h = 20;
     this.vx = 0;
     this.vy = 0;
-    this.speed = 400;
-    this.color = '#4fc3f7';
+    this.angle = 0; // radians, 0 = east, PI/2 = south
+    this.speed = 300;
+    this.turnSpeed = 2.5; // rad/sec for keyboard turning
+    this.mouseSensitivity = 0.002;
   }
 
   update(dt) {
-    // Input → acceleration
-    let ax = 0, ay = 0;
-    if (isKeyDown('KeyW') || isKeyDown('ArrowUp'))    ay = -1;
-    if (isKeyDown('KeyS') || isKeyDown('ArrowDown'))   ay =  1;
-    if (isKeyDown('KeyA') || isKeyDown('ArrowLeft'))    ax = -1;
-    if (isKeyDown('KeyD') || isKeyDown('ArrowRight'))   ax =  1;
+    // Keyboard turning (arrow keys)
+    if (isKeyDown('ArrowLeft'))  this.angle -= this.turnSpeed * dt;
+    if (isKeyDown('ArrowRight')) this.angle += this.turnSpeed * dt;
 
-    // Normalize diagonal movement
-    if (ax !== 0 && ay !== 0) {
+    // Forward / backward / strafe
+    let fwd = 0, strafe = 0;
+    if (isKeyDown('KeyW') || isKeyDown('ArrowUp'))    fwd =  1;
+    if (isKeyDown('KeyS') || isKeyDown('ArrowDown'))   fwd = -1;
+    if (isKeyDown('KeyA')) strafe = -1;
+    if (isKeyDown('KeyD')) strafe =  1;
+
+    if (fwd !== 0 && strafe !== 0) {
       const inv = 1 / Math.SQRT2;
-      ax *= inv;
-      ay *= inv;
+      fwd *= inv;
+      strafe *= inv;
     }
 
-    this.vx += ax * this.speed * 4 * dt;
-    this.vy += ay * this.speed * 4 * dt;
+    const cos = Math.cos(this.angle);
+    const sin = Math.sin(this.angle);
+    const mx = (cos * fwd - sin * strafe) * this.speed;
+    const my = (sin * fwd + cos * strafe) * this.speed;
 
-    // Cap velocity
-    const maxV = this.speed;
+    this.vx += mx * 4 * dt;
+    this.vy += my * 4 * dt;
+
     const spd = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (spd > maxV) {
-      this.vx = (this.vx / spd) * maxV;
-      this.vy = (this.vy / spd) * maxV;
+    if (spd > this.speed) {
+      this.vx = (this.vx / spd) * this.speed;
+      this.vy = (this.vy / spd) * this.speed;
     }
 
-    applyFriction(this, 0.001, dt); // heavy friction for responsive feel
+    applyFriction(this, 0.001, dt);
     applyVelocity(this, dt);
   }
 }
