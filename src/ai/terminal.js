@@ -1,7 +1,7 @@
 // AI Terminal — in-game retro terminal for creating game assets via "AI".
 // Opens with T key, player types a prompt, AI generates vehicles/weapons/NPCs/missions.
 
-import { generateMission, generateVehicle, generateWeapon, generateNPC, detectAssetType, getThinkingSteps } from './generator.js';
+import { generateMission, generateMissionWithClaude, generateVehicle, generateWeapon, generateNPC, detectAssetType, getThinkingSteps, hasClaudeApiKey } from './generator.js';
 import { validateMission } from '../missions/schema.js';
 
 export class AITerminal {
@@ -207,24 +207,28 @@ export class AITerminal {
     // Detect asset type
     const assetType = detectAssetType(text);
 
-    // Show AI thinking steps
-    const steps = getThinkingSteps(text, assetType);
-    await this._showSteps(steps);
-
     try {
-      switch (assetType) {
-        case 'vehicle':
-          this._handleVehicleResult(text);
-          break;
-        case 'weapon':
-          this._handleWeaponResult(text);
-          break;
-        case 'npc':
-          this._handleNPCResult(text);
-          break;
-        default:
-          this._handleMissionResult(text);
-          break;
+      if (assetType === 'mission' && hasClaudeApiKey()) {
+        await this._handleMissionWithClaude(text);
+      } else {
+        // Show canned AI thinking steps for non-Claude paths
+        const steps = getThinkingSteps(text, assetType);
+        await this._showSteps(steps);
+
+        switch (assetType) {
+          case 'vehicle':
+            this._handleVehicleResult(text);
+            break;
+          case 'weapon':
+            this._handleWeaponResult(text);
+            break;
+          case 'npc':
+            this._handleNPCResult(text);
+            break;
+          default:
+            this._handleMissionResult(text);
+            break;
+        }
       }
     } catch (e) {
       this._addLine('Error: ' + e.message, 'error');
@@ -281,31 +285,56 @@ export class AITerminal {
 
   _handleMissionResult(prompt) {
     const mission = generateMission(prompt);
+    this._renderMissionResult(mission);
+  }
+
+  async _handleMissionWithClaude(prompt) {
+    this._addLine('[Claude API key detected — using real AI]', 'step');
+    try {
+      const mission = await generateMissionWithClaude(prompt, {
+        onStep: (msg) => this._addLine(msg, 'step'),
+      });
+      this._addLine('', 'system');
+      this._renderMissionResult(mission);
+    } catch (e) {
+      this._addLine('Claude error: ' + e.message, 'error');
+      this._addLine('Falling back to keyword generator...', 'step');
+      this._handleMissionResult(prompt);
+    }
+  }
+
+  _renderMissionResult(mission) {
     const { valid, errors, warnings } = validateMission(mission);
 
     if (!valid) {
       this._addLine('Generation failed — invalid mission:', 'error');
       for (const err of errors) this._addLine('  ' + err, 'error');
-    } else {
-      this._addLine('Mission generated!', 'success');
-      this._addLine('', 'system');
-      this._addLine(`Name:       ${mission.name}`, 'mission');
-      this._addLine(`Difficulty: ${mission.difficulty}`, 'mission');
-      this._addLine(`Objectives: ${mission.objectives.length}`, 'mission');
-      for (let i = 0; i < mission.objectives.length; i++) {
-        this._addLine(`  ${i + 1}. [${mission.objectives[i].type}] ${mission.objectives[i].description}`, 'mission');
-      }
-      this._addLine(`Reward:     $${mission.reward.cash} + ${mission.reward.xp} XP`, 'mission');
-      if (mission.spawn_entities) {
-        this._addLine(`Entities:   ${mission.spawn_entities.length} NPCs`, 'mission');
-      }
-      if (warnings && warnings.length > 0) {
-        for (const w of warnings) this._addLine('  Warning: ' + w, 'step');
-      }
-      this._addLine('', 'system');
-      this._addLine('Type "install" to add this mission to your game.', 'ai');
-      this.pendingAsset = { type: 'mission', data: mission };
+      return;
     }
+
+    this._addLine('Mission generated!', 'success');
+    this._addLine('', 'system');
+    this._addLine(`Name:       ${mission.name}`, 'mission');
+    if (mission.description) this._addLine(`Summary:    ${mission.description}`, 'mission');
+    this._addLine(`Difficulty: ${mission.difficulty || 'medium'}`, 'mission');
+    this._addLine(`Objectives: ${mission.objectives.length}`, 'mission');
+    for (let i = 0; i < mission.objectives.length; i++) {
+      this._addLine(`  ${i + 1}. [${mission.objectives[i].type}] ${mission.objectives[i].description}`, 'mission');
+    }
+    if (mission.reward) {
+      const cash = mission.reward.cash ?? 0;
+      const xp = mission.reward.xp ?? mission.objectives.length * 200;
+      this._addLine(`Reward:     $${cash} + ${xp} XP`, 'mission');
+    }
+    if (mission.spawn_entities) {
+      this._addLine(`Entities:   ${mission.spawn_entities.length} spawned`, 'mission');
+    }
+    if (warnings && warnings.length > 0) {
+      for (const w of warnings) this._addLine('  Warning: ' + w, 'step');
+    }
+    this._addLine('', 'system');
+    this._addLine('Type "install" to add this mission to your game.', 'ai');
+    this.pendingAsset = { type: 'mission', data: mission };
   }
 
   _installAsset() {

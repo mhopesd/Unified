@@ -1,7 +1,169 @@
 // AI Asset Generator — parses natural language into playable game assets.
 // Handles missions, vehicles, weapons, and NPCs.
 
-import { DISTRICTS, NPC_ARCHETYPES, VEHICLE_TYPES, ITEM_TYPES, OBJECTIVE_TYPES } from '../missions/schema.js';
+import { DISTRICTS, NPC_ARCHETYPES, VEHICLE_TYPES, ITEM_TYPES, OBJECTIVE_TYPES, validateMission } from '../missions/schema.js';
+
+// --- Claude API integration ---
+
+export const CLAUDE_API_KEY_STORAGE = 'unified-anthropic-api-key';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MAX_RETRIES = 3;
+
+export function hasClaudeApiKey() {
+  return !!(localStorage.getItem(CLAUDE_API_KEY_STORAGE) || '').trim();
+}
+
+function getClaudeApiKey() {
+  return (localStorage.getItem(CLAUDE_API_KEY_STORAGE) || '').trim();
+}
+
+const MISSION_SYSTEM_PROMPT = `You design missions for a top-down open-world game called "Unified City". Given a player's description, output ONE JSON mission that strictly conforms to this schema:
+
+{
+  "name": "string, max 60 chars",
+  "description": "string, max 200 chars (shown to player)",
+  "difficulty": "easy" | "medium" | "hard",
+  "estimated_minutes": integer 1-30,
+  "triggerZone": { "x": number, "y": number, "radius": 10-200 },
+  "objectives": [{
+    "type": "goto" | "collect" | "deliver" | "eliminate" | "escort" | "survive" | "interact",
+    "description": "string, max 120 chars",
+    "target": { "x": number, "y": number, "radius": 5-300 },
+    "item": "string (required for collect/deliver)",
+    "target_npc": "string (required for eliminate)",
+    "time_limit_seconds": integer (required for survive),
+    "quantity": integer (optional)
+  }],
+  "spawn_entities": [{
+    "type": "npc" | "vehicle" | "item" | "prop",
+    "archetype": "string from lists below",
+    "position": [x, y],
+    "behavior": "idle" | "patrol" | "hostile" | "flee" | "follow_player"
+  }],
+  "reward": {
+    "cash": integer (easy: 500-1500, medium: 1500-4000, hard: 4000-10000),
+    "reputation": integer -100 to 100,
+    "items": ["string"]
+  },
+  "fail_conditions": [{
+    "type": "player_death" | "time_expired" | "npc_death" | "out_of_bounds",
+    "target_npc": "string (required for npc_death)",
+    "message": "string, max 200 chars"
+  }]
+}
+
+World map is 3200 x 2560 pixels. All coordinates MUST be within these bounds AND inside a district:
+- Old Town: (0,0) to (1200,960) — historic buildings, markets
+- Uptown: (1200,0) to (2400,960) — wealthy residential, mansions
+- The Hills: (2400,0) to (3200,960) — winding roads, overlooks
+- Midtown: (0,960) to (1200,1920) — shops, apartments, nightlife
+- Downtown: (1200,960) to (2000,1600) — banks, offices, high-rises
+- Industrial: (2400,1600) to (3200,2560) — factories, scrapyards
+- The Docks: (0,1920) to (1200,2560) — warehouses, shipping, shady
+
+NPC archetypes (use these exact strings): civilian, gang_member, cop, shopkeeper, informant, bodyguard, driver, boss
+Vehicle types: sedan, sports_car, truck, motorcycle, van, boat
+Item types: cash_bundle, key_card, briefcase, phone, weapon_pistol, weapon_shotgun, medkit, disguise, evidence_file
+
+Hard rules:
+1. 2-6 objectives. Match objective locations to districts the player mentioned or that fit the vibe.
+2. At least one fail_condition (player_death is a safe default).
+3. reward.cash MUST match the difficulty band exactly.
+4. Max 15 spawn_entities total.
+5. Boats can ONLY spawn in The Docks district.
+6. "collect"/"deliver" objectives need "item". "eliminate" needs "target_npc" or "quantity". "survive" needs "time_limit_seconds".
+7. Pick NPC/item/vehicle archetypes that actually fit the story. Don't invent new ones.
+
+Output ONLY the JSON object. No prose, no markdown fences, no commentary.`;
+
+function extractJson(text) {
+  try { return JSON.parse(text); } catch {}
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) {
+    try { return JSON.parse(fence[1]); } catch {}
+  }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch {}
+  }
+  return null;
+}
+
+async function callClaude(apiKey, messages) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 2048,
+      system: MISSION_SYSTEM_PROMPT,
+      messages,
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    const snippet = body.slice(0, 240);
+    throw new Error(`Claude API ${response.status}: ${snippet || response.statusText}`);
+  }
+  const data = await response.json();
+  const text = data?.content?.[0]?.text || '';
+  if (!text) throw new Error('Claude returned an empty response');
+  return text;
+}
+
+/**
+ * Generate a mission by calling Claude with the player's prompt.
+ * Retries up to CLAUDE_MAX_RETRIES if validation fails, feeding errors back.
+ * Returns the validated mission, or throws.
+ * Callers should first check hasClaudeApiKey() and fall back to generateMission().
+ * `onStep(msg)` is called with progress strings.
+ */
+export async function generateMissionWithClaude(prompt, { onStep } = {}) {
+  const apiKey = getClaudeApiKey();
+  if (!apiKey) throw new Error('No Claude API key configured');
+
+  const messages = [{ role: 'user', content: `Player request: ${prompt}` }];
+  let lastErrors = null;
+  let lastMission = null;
+
+  for (let attempt = 1; attempt <= CLAUDE_MAX_RETRIES; attempt++) {
+    onStep?.(attempt === 1
+      ? 'Asking Claude to design the mission...'
+      : `Fixing ${lastErrors.length} validation error${lastErrors.length === 1 ? '' : 's'} (attempt ${attempt}/${CLAUDE_MAX_RETRIES})...`);
+
+    const text = await callClaude(apiKey, messages);
+    const mission = extractJson(text);
+    if (!mission) {
+      throw new Error('Claude response was not valid JSON');
+    }
+
+    mission.id = 'ai-' + Date.now();
+    if (!mission.author) mission.author = 'Claude';
+
+    const { valid, errors } = validateMission(mission);
+    if (valid) {
+      onStep?.('Mission validated.');
+      return mission;
+    }
+
+    lastErrors = errors;
+    lastMission = mission;
+    messages.push({ role: 'assistant', content: text });
+    messages.push({
+      role: 'user',
+      content: `That mission failed validation with these errors:\n${errors.map(e => '- ' + e).join('\n')}\n\nReturn a corrected JSON mission. Output ONLY the JSON.`,
+    });
+  }
+
+  const summary = (lastErrors || []).slice(0, 3).join('; ');
+  throw new Error(`Claude couldn't produce a valid mission after ${CLAUDE_MAX_RETRIES} tries: ${summary}`);
+}
 
 // --- Keyword maps ---
 

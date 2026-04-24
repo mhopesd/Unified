@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Unified — Open World</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -13,9 +17,220 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
+      height: 100dvh;
       font-family: 'Segoe UI', system-ui, sans-serif;
     }
-    canvas { display: block; width: 100vw; height: 100vh; }
+    canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; }
+
+    /* ── Loading Screen ── */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 0.5s ease;
+    }
+    #loading-screen.done { opacity: 0; pointer-events: none; }
+    .loading-title {
+      font-size: 48px;
+      font-weight: 900;
+      color: #fff;
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      margin-bottom: 30px;
+    }
+    .loading-bar-outer {
+      width: 300px;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .loading-bar-inner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #ffd700, #ff8800);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .loading-status {
+      color: #666;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      margin-top: 12px;
+      letter-spacing: 2px;
+    }
+
+    /* ── Error Overlay ── */
+    #error-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 5000;
+      padding: 40px;
+    }
+    #error-overlay.visible { display: flex; }
+    .error-title {
+      color: #ff4444;
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .error-message {
+      color: #ccc;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      max-width: 600px;
+      text-align: center;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      word-break: break-word;
+    }
+    .error-details {
+      color: #666;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      max-width: 700px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #111;
+      padding: 12px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      margin-bottom: 24px;
+    }
+    .error-btn {
+      padding: 10px 28px;
+      background: #ffd700;
+      color: #111;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .error-btn:hover { background: #ffcc00; }
+
+    /* ── Pause Menu ── */
+    #pause-menu {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    #pause-menu.open { display: flex; }
+    .pause-title {
+      font-size: 42px;
+      font-weight: 900;
+      color: #ffd700;
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      margin-bottom: 40px;
+    }
+    .pause-btn {
+      width: 240px;
+      padding: 14px;
+      margin: 6px 0;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #eee;
+      font-size: 16px;
+      font-family: 'Courier New', monospace;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .pause-btn:hover, .pause-btn:focus {
+      background: rgba(255,215,0,0.15);
+      border-color: #ffd700;
+      color: #ffd700;
+      outline: none;
+    }
+    .pause-btn:active { transform: scale(0.97); }
+    .pause-saves {
+      margin-top: 20px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .pause-saves.open { display: flex; }
+    .pause-save-slot {
+      width: 280px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid #333;
+      color: #aaa;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+    }
+    .pause-save-slot:hover { border-color: #ffd700; color: #ffd700; }
+    .pause-save-slot.empty { color: #555; font-style: italic; }
+    .pause-volume {
+      margin-top: 12px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: #aaa;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+    }
+    .pause-volume.open { display: flex; }
+    .pause-volume input[type=range] {
+      width: 200px;
+      accent-color: #ffd700;
+    }
+    .pause-volume input[type=password],
+    .pause-volume input[type=text] {
+      width: 260px;
+      background: #0a0a12;
+      border: 1px solid #1a3a1a;
+      color: #4ae04a;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 3px;
+      outline: none;
+    }
+    .pause-volume input[type=password]:focus,
+    .pause-volume input[type=text]:focus { border-color: #4ae04a; }
+    .pause-volume .api-key-hint {
+      font-size: 10px;
+      color: #666;
+      max-width: 260px;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .pause-volume .api-key-status { font-size: 11px; color: #4ae04a; min-height: 14px; }
+    .pause-volume .api-key-status.missing { color: #888; }
+    .pause-version {
+      position: absolute;
+      bottom: 20px;
+      color: #333;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+    }
 
     /* GTA-style HUD */
     #hud-top-right {
@@ -141,6 +356,7 @@
       font-size: 11px;
       pointer-events: none;
       z-index: 10;
+      white-space: nowrap;
     }
     #hud-fps {
       position: fixed;
@@ -150,9 +366,196 @@
       pointer-events: none;
       z-index: 10;
     }
+
+    /* Auto-save indicator */
+    #autosave-indicator {
+      position: fixed;
+      top: 16px; left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,215,0,0.7);
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      pointer-events: none;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #autosave-indicator.show { opacity: 1; }
+
+    /* ── Title Screen ── */
+    #title-screen {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 60%, #0a0a18 0%, #000 70%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      cursor: pointer;
+      transition: opacity 0.9s ease;
+      overflow: hidden;
+    }
+    /* City silhouette background */
+    #title-screen::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 45%;
+      background:
+        linear-gradient(to top, #060610 0%, transparent 100%),
+        repeating-linear-gradient(90deg,
+          transparent 0px,  transparent 39px,
+          #0d0d20 40px,     #0d0d20 90px,
+          transparent 90px, transparent 110px,
+          #0a0a1a 110px,    #0a0a1a 170px,
+          transparent 170px,transparent 210px,
+          #0e0e22 210px,    #0e0e22 240px,
+          transparent 240px,transparent 280px
+        );
+      clip-path: polygon(
+        0% 60%, 3% 55%, 5% 30%, 7% 30%, 8% 50%, 10% 45%, 12% 20%, 14% 20%, 15% 45%,
+        18% 55%, 22% 40%, 24% 10%, 26% 10%, 28% 40%, 32% 60%,
+        36% 55%, 40% 35%, 42% 35%, 44% 50%, 48% 65%,
+        52% 60%, 56% 40%, 58% 10%, 60% 10%, 62% 40%,
+        66% 45%, 70% 25%, 72% 25%, 74% 45%,
+        78% 50%, 82% 30%, 84% 30%, 86% 55%,
+        90% 60%, 95% 45%, 97% 45%, 100% 55%, 100% 100%, 0% 100%
+      );
+    }
+    /* Scanlines overlay */
+    #title-screen::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px, transparent 2px,
+        rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 3px
+      );
+      pointer-events: none;
+    }
+    #title-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .title-eyebrow {
+      color: #ffd700;
+      font-size: 12px;
+      letter-spacing: 10px;
+      font-family: 'Courier New', monospace;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      opacity: 0.8;
+      position: relative;
+    }
+    .title-main {
+      font-size: clamp(72px, 13vw, 140px);
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 6px;
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      text-transform: uppercase;
+      text-shadow:
+        0 0 80px rgba(255,210,60,0.25),
+        0 0 30px rgba(180,140,40,0.2),
+        0 4px 0 rgba(0,0,0,0.9);
+      line-height: 1;
+      position: relative;
+    }
+    .title-accent {
+      width: 220px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #ffd700 30%, #ffd700 70%, transparent);
+      margin: 18px auto 0;
+      position: relative;
+    }
+    .title-tagline {
+      color: #666;
+      font-size: 13px;
+      letter-spacing: 6px;
+      font-family: 'Courier New', monospace;
+      margin-top: 14px;
+      position: relative;
+    }
+    /* Controls grid */
+    .title-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 40px;
+      margin-top: 32px;
+      position: relative;
+      opacity: 0.75;
+    }
+    .title-controls div {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #aaa;
+      white-space: nowrap;
+    }
+    .title-controls span {
+      color: #ffd700;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    .title-prompt {
+      position: absolute;
+      bottom: 50px;
+      color: rgba(255,255,255,0.45);
+      font-size: 13px;
+      letter-spacing: 6px;
+      font-family: 'Courier New', monospace;
+      text-transform: uppercase;
+      animation: title-pulse 2s ease-in-out infinite;
+      z-index: 1;
+    }
+    @keyframes title-pulse {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 0.9; }
+    }
   </style>
 </head>
 <body>
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-title">Unified</div>
+    <div class="loading-bar-outer">
+      <div class="loading-bar-inner" id="loading-bar"></div>
+    </div>
+    <div class="loading-status" id="loading-status">Initializing...</div>
+  </div>
+
+  <!-- Error Overlay -->
+  <div id="error-overlay">
+    <div class="error-title">Something went wrong</div>
+    <div class="error-message" id="error-message">The game encountered an unexpected error.</div>
+    <div class="error-details" id="error-details"></div>
+    <button class="error-btn" onclick="location.reload()">Reload Game</button>
+  </div>
+
+  <!-- Title Screen -->
+  <div id="title-screen" style="display:none;">
+    <div class="title-eyebrow">Open World · Mission Creator</div>
+    <div class="title-main">Unified</div>
+    <div class="title-accent"></div>
+    <div class="title-tagline">A City Without Limits</div>
+    <div class="title-controls">
+      <div><span>[WASD]</span>Move</div>
+      <div><span>[R]</span>Radio channel</div>
+      <div><span>[Mouse]</span>Look around</div>
+      <div><span>[M]</span>Marketplace</div>
+      <div><span>[F]</span>Enter / exit vehicle</div>
+      <div><span>[T]</span>AI Asset Creator</div>
+      <div><span>[E]</span>Interact / buy / job</div>
+      <div><span>[V]</span>Visual editor</div>
+      <div><span>[G]</span>Pick up weapon</div>
+      <div><span>[1-5]</span>Switch weapon</div>
+      <div><span>[Shift]</span>Sprint</div>
+      <div><span>[Esc]</span>Pause menu</div>
+    </div>
+    <div class="title-prompt">Click or press any key to play</div>
+  </div>
+
   <canvas id="game"></canvas>
 
   <!-- GTA-style HUD -->
@@ -171,9 +574,60 @@
     <h2>Marketplace</h2>
     <div id="mp-list"></div>
   </div>
-  <div id="controls-hint">WASD move · F enter/exit car · E interact · T ai creator · M marketplace</div>
+  <div id="controls-hint">WASD move · Shift sprint · F car · E interact/buy · G pick up · 1-5/Tab weapon · LMB shoot · T ai · M market · V visual editor · R radio · Esc pause</div>
   <div id="hud-fps">FPS: 0</div>
+  <div id="autosave-indicator">Saving...</div>
 
-  <script type="module" src="/src/main.js"></script>
+  <!-- Pause Menu -->
+  <div id="pause-menu">
+    <div class="pause-title">Paused</div>
+    <button class="pause-btn" id="pause-resume">Resume</button>
+    <button class="pause-btn" id="pause-save">Save Game</button>
+    <button class="pause-btn" id="pause-load">Load Game</button>
+    <button class="pause-btn" id="pause-settings">Settings</button>
+    <button class="pause-btn" id="pause-controls">Controls</button>
+    <div class="pause-saves" id="pause-saves-panel"></div>
+    <div class="pause-volume" id="pause-settings-panel">
+      <label>Master Volume</label>
+      <input type="range" id="volume-slider" min="0" max="100" value="80">
+      <label>Mouse Sensitivity</label>
+      <input type="range" id="sensitivity-slider" min="1" max="100" value="30">
+      <label>Claude API Key <span style="color:#666;font-weight:normal;">(for AI missions)</span></label>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      <div class="api-key-status missing" id="api-key-status">No key set — using keyword fallback.</div>
+      <div class="api-key-hint">Stored locally in your browser. Get a key at console.anthropic.com.</div>
+    </div>
+    <div class="pause-version">Unified v0.1.0</div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+  <script>
+    // Global error handler — catches unhandled errors and module load failures
+    window.__gameError = function(msg, details) {
+      var overlay = document.getElementById('error-overlay');
+      var msgEl = document.getElementById('error-message');
+      var detailsEl = document.getElementById('error-details');
+      msgEl.textContent = msg;
+      detailsEl.textContent = details || '';
+      overlay.classList.add('visible');
+      // Hide loading screen if still showing
+      var ls = document.getElementById('loading-screen');
+      if (ls) ls.style.display = 'none';
+    };
+
+    window.addEventListener('error', function(e) {
+      window.__gameError(
+        'A runtime error occurred. Try reloading.',
+        (e.message || '') + '\n' + (e.filename || '') + ':' + (e.lineno || '')
+      );
+    });
+
+    window.addEventListener('unhandledrejection', function(e) {
+      window.__gameError(
+        'An async error occurred. Try reloading.',
+        e.reason ? (e.reason.message || String(e.reason)) : 'Unknown error'
+      );
+    });
+  </script>
 </body>
 </html>

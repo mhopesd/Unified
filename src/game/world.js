@@ -22,7 +22,8 @@ export const TILE_COLORS = {
   [TILE.PARK]:     '#2a6b22',
 };
 
-export const SOLID_TILES = new Set([TILE.BUILDING, TILE.WALL, TILE.WATER]);
+export const SOLID_TILES = new Set([TILE.BUILDING, TILE.WALL]);
+// Water is no longer solid — player can swim in it
 
 export const TILE_SIZE = 32;
 
@@ -53,10 +54,10 @@ export function generateWorld(cols, rows) {
     map[rows - 1][c] = TILE.WALL;
   }
 
-  // City grid — narrow streets, dense blocks
-  const blockW = 5;  // tiles between roads (tight blocks)
-  const blockH = 4;
-  const roadWidth = 1; // narrow single-tile streets
+  // City grid — wider roads, larger blocks for proper scale
+  const blockW = 8;  // tiles between roads (bigger building footprints)
+  const blockH = 6;
+  const roadWidth = 2; // two-lane roads
 
   // Lay down horizontal roads
   for (let r = 4; r < rows - 3; r += blockH + roadWidth) {

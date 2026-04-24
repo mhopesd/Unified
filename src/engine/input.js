@@ -3,6 +3,7 @@ const keys = {};
 const justPressed = {};
 let mouseDX = 0;
 let mouseClicked = false;
+let mouseHeld = false;
 
 export function initInput() {
   window.addEventListener('keydown', (e) => {
@@ -24,7 +25,12 @@ export function initInput() {
   document.addEventListener('mousedown', (e) => {
     if (document.pointerLockElement && e.button === 0) {
       mouseClicked = true;
+      mouseHeld = true;
     }
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (e.button === 0) mouseHeld = false;
   });
 }
 
@@ -45,4 +51,5 @@ export function consumeMouseDX() {
 export function isKeyDown(code) { return !!keys[code]; }
 export function wasKeyPressed(code) { return !!justPressed[code]; }
 export function wasMouseClicked() { return mouseClicked; }
+export function isMouseHeld() { return mouseHeld; }
 export function clearJustPressed() { for (const k in justPressed) delete justPressed[k]; mouseClicked = false; }
