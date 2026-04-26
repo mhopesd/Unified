@@ -54,14 +54,29 @@ export class Minimap {
       camera.viewH * scaleY
     );
 
-    // Mission markers on minimap
+    // Mission / quest markers on minimap
     for (const m of markers) {
       const mx = x + m.x * scaleX;
       const my = y + m.y * scaleY;
-      ctx.fillStyle = m.type === 'trigger' ? '#ffd700' : '#4fc3f7';
+      if (m.type === 'trigger') {
+        ctx.fillStyle = '#ffd700'; // yellow — mission start
+      } else if (m.type === 'sidequest') {
+        ctx.fillStyle = '#44ff88'; // green — side quest target
+      } else {
+        ctx.fillStyle = '#4fc3f7'; // blue — objective
+      }
       ctx.beginPath();
       ctx.arc(mx, my, 3, 0, Math.PI * 2);
       ctx.fill();
+      // Pulse ring for side quest targets
+      if (m.type === 'sidequest') {
+        const ring = ((Date.now() / 800) % 1);
+        ctx.strokeStyle = `rgba(68,255,136,${0.6 * (1 - ring)})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(mx, my, 3 + ring * 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     // Player dot

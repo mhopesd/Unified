@@ -250,6 +250,13 @@ export function validateMission(data) {
     }
   }
 
+  // --- Price (marketplace sale price; optional) ---
+  if (data.price != null) {
+    if (!Number.isInteger(data.price) || data.price < 0 || data.price > 5000) {
+      errors.push('"price" must be an integer 0-5000 (0 = free)');
+    }
+  }
+
   // --- Reward ---
   if (data.reward != null && typeof data.reward === 'object') {
     if (data.reward.cash != null) {
