@@ -1,0 +1,14 @@
+{
+  "name": "unified-marketplace-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 execute unified-marketplace --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute unified-marketplace --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

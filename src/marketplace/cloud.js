@@ -1,13 +1,49 @@
 // Cloud marketplace — share missions online via a simple REST API
 // Uses localStorage as fallback when no backend is configured
 
-const CLOUD_API_URL = localStorage.getItem('unified_cloud_api') || '';
+export const CLOUD_API_STORAGE = 'unified_cloud_api';
+export const VOTER_ID_STORAGE = 'unified_voter_id';
+
+function getApiUrl() {
+  return (localStorage.getItem(CLOUD_API_STORAGE) || '').trim().replace(/\/+$/, '');
+}
+
+function getVoterId() {
+  let id = localStorage.getItem(VOTER_ID_STORAGE);
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem(VOTER_ID_STORAGE, id);
+  }
+  return id;
+}
+
+async function api(method, path, body) {
+  const base = getApiUrl();
+  if (!base) throw new Error('No API URL configured');
+  const headers = { 'x-voter-id': getVoterId() };
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const res = await fetch(base + path, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.error || ''; } catch {}
+    throw new Error(`HTTP ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  return res.json();
+}
 
 export class CloudMarketplace {
   constructor() {
     this.localCache = this._loadCache();
     this.syncing = false;
     this.lastError = null;
+  }
+
+  isOnline() {
+    return !!getApiUrl();
   }
 
   _loadCache() {
@@ -20,49 +56,45 @@ export class CloudMarketplace {
     localStorage.setItem('unified_cloud_missions', JSON.stringify(this.localCache));
   }
 
-  // Upload a mission to the cloud
+  // Upload a mission to the cloud (also caches locally so it survives offline)
   async upload(missionData) {
     const entry = {
       ...missionData,
-      uploadedAt: new Date().toISOString(),
-      downloads: 0,
-      rating: 0,
-      ratingCount: 0,
-      comments: [],
+      uploadedAt: missionData.uploadedAt || new Date().toISOString(),
+      downloads: missionData.downloads || 0,
+      rating: missionData.rating || 0,
+      ratingCount: missionData.ratingCount || 0,
+      comments: missionData.comments || [],
     };
 
-    if (CLOUD_API_URL) {
+    // Always cache locally first so offline-created missions persist.
+    if (!this.localCache.find(m => m.id === entry.id)) {
+      this.localCache.push(entry);
+      this._saveCache();
+    }
+
+    if (this.isOnline()) {
       try {
         this.syncing = true;
-        const res = await fetch(`${CLOUD_API_URL}/missions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entry),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const result = await res.json();
+        const result = await api('POST', '/missions', missionData);
         this.syncing = false;
         return { success: true, id: result.id };
       } catch (err) {
         this.lastError = err.message;
         this.syncing = false;
+        return { success: true, id: entry.id, local: true, warn: err.message };
       }
     }
 
-    // Fallback: save locally
-    this.localCache.push(entry);
-    this._saveCache();
     return { success: true, id: entry.id, local: true };
   }
 
-  // Browse cloud missions
+  // Browse cloud missions (or fall back to local cache when offline)
   async browse(page = 0, limit = 20) {
-    if (CLOUD_API_URL) {
+    if (this.isOnline()) {
       try {
         this.syncing = true;
-        const res = await fetch(`${CLOUD_API_URL}/missions?page=${page}&limit=${limit}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const missions = await res.json();
+        const missions = await api('GET', `/missions?page=${page}&limit=${limit}`);
         this.syncing = false;
         return missions;
       } catch (err) {
@@ -70,24 +102,18 @@ export class CloudMarketplace {
         this.syncing = false;
       }
     }
-
-    // Fallback: return local cache
     return this.localCache.slice(page * limit, (page + 1) * limit);
   }
 
   // Search missions
   async search(query) {
-    if (CLOUD_API_URL) {
+    if (this.isOnline()) {
       try {
-        const res = await fetch(`${CLOUD_API_URL}/missions/search?q=${encodeURIComponent(query)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+        return await api('GET', `/missions/search?q=${encodeURIComponent(query)}`);
       } catch (err) {
         this.lastError = err.message;
       }
     }
-
-    // Local fallback: simple text search
     const q = query.toLowerCase();
     return this.localCache.filter(m =>
       (m.name || '').toLowerCase().includes(q) ||
@@ -99,20 +125,10 @@ export class CloudMarketplace {
   // Rate a mission
   async rate(missionId, stars) {
     stars = Math.max(1, Math.min(5, Math.round(stars)));
-
-    if (CLOUD_API_URL) {
-      try {
-        await fetch(`${CLOUD_API_URL}/missions/${missionId}/rate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stars }),
-        });
-      } catch (err) {
-        this.lastError = err.message;
-      }
+    if (this.isOnline()) {
+      try { await api('POST', `/missions/${encodeURIComponent(missionId)}/rate`, { stars }); }
+      catch (err) { this.lastError = err.message; }
     }
-
-    // Local fallback
     const mission = this.localCache.find(m => m.id === missionId);
     if (mission) {
       mission.ratingCount = (mission.ratingCount || 0) + 1;
@@ -125,20 +141,10 @@ export class CloudMarketplace {
   // Comment on a mission
   async comment(missionId, author, text) {
     const entry = { author, text, date: new Date().toISOString() };
-
-    if (CLOUD_API_URL) {
-      try {
-        await fetch(`${CLOUD_API_URL}/missions/${missionId}/comments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entry),
-        });
-      } catch (err) {
-        this.lastError = err.message;
-      }
+    if (this.isOnline()) {
+      try { await api('POST', `/missions/${encodeURIComponent(missionId)}/comments`, { author, text }); }
+      catch (err) { this.lastError = err.message; }
     }
-
-    // Local fallback
     const mission = this.localCache.find(m => m.id === missionId);
     if (mission) {
       if (!mission.comments) mission.comments = [];
@@ -148,8 +154,24 @@ export class CloudMarketplace {
     return { success: true };
   }
 
-  // Get total mission count
-  getCount() {
-    return this.localCache.length;
+  // Track an install (downloads + earnings counter on the server)
+  async trackInstall(missionId) {
+    if (!this.isOnline()) return;
+    try { await api('POST', `/missions/${encodeURIComponent(missionId)}/install`); }
+    catch (err) { this.lastError = err.message; }
   }
+
+  // Quick health check — returns { ok, latencyMs, error? }
+  async ping() {
+    if (!this.isOnline()) return { ok: false, error: 'No URL configured' };
+    const start = performance.now();
+    try {
+      await api('GET', '/health');
+      return { ok: true, latencyMs: Math.round(performance.now() - start) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  getCount() { return this.localCache.length; }
 }

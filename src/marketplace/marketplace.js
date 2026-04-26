@@ -140,6 +140,10 @@ export class Marketplace {
     this.missionEngine.loadMission(mission);
     this.installedIds.add(missionId);
     this._savePersisted();
+    // Best-effort server-side install counter — fire and forget.
+    if (typeof this.cloud.trackInstall === 'function') {
+      this.cloud.trackInstall(missionId).catch(() => {});
+    }
     this.render();
     return { success: true };
   }
