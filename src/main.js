@@ -20,6 +20,7 @@ import { TrafficVehicle, CopVehicle, spawnTraffic, spawnCopNear, Roadblock, spaw
 import { NPC, spawnNPCs, NPC_QUEST_TEMPLATES } from './game/npc.js';
 import { AITerminal } from './ai/terminal.js';
 import { CLAUDE_API_KEY_STORAGE } from './ai/generator.js';
+import { CLOUD_API_STORAGE } from './marketplace/cloud.js';
 import { ParticleSystem } from './engine/particles.js';
 import { WeatherSystem } from './engine/weather.js';
 import { Radio } from './engine/radio.js';
@@ -2758,6 +2759,48 @@ if (apiKeyInput) {
     renderApiKeyStatus();
   });
   renderApiKeyStatus();
+}
+
+// Marketplace API URL + test button
+const cloudUrlInput = document.getElementById('cloud-url-input');
+const cloudStatus = document.getElementById('cloud-status');
+const cloudTestBtn = document.getElementById('cloud-test-btn');
+function renderCloudStatus(text, ok) {
+  if (!cloudStatus) return;
+  cloudStatus.textContent = text;
+  cloudStatus.classList.toggle('missing', !ok);
+}
+function renderCloudIdle() {
+  const url = (localStorage.getItem(CLOUD_API_STORAGE) || '').trim();
+  if (url) renderCloudStatus(`Configured: ${url.replace(/^https?:\/\//, '').slice(0, 40)}`, true);
+  else renderCloudStatus('Offline — using local-only marketplace.', false);
+}
+if (cloudUrlInput) {
+  cloudUrlInput.value = localStorage.getItem(CLOUD_API_STORAGE) || '';
+  cloudUrlInput.addEventListener('keydown', (e) => e.stopPropagation());
+  cloudUrlInput.addEventListener('input', (e) => {
+    const val = e.target.value.trim().replace(/\/+$/, '');
+    if (val) localStorage.setItem(CLOUD_API_STORAGE, val);
+    else localStorage.removeItem(CLOUD_API_STORAGE);
+    renderCloudIdle();
+  });
+  renderCloudIdle();
+}
+if (cloudTestBtn) {
+  cloudTestBtn.addEventListener('click', async () => {
+    renderCloudStatus('Testing…', true);
+    const result = await marketplace.cloud.ping();
+    if (result.ok) {
+      renderCloudStatus(`OK — ${result.latencyMs}ms. Re-syncing…`, true);
+      // Force a fresh hydrate so the catalog picks up live data
+      marketplace.hydrated = false;
+      marketplace._hydrate().then(() => {
+        renderCloudStatus(`Connected — ${marketplace.catalog.length} missions synced.`, true);
+      });
+    } else {
+      renderCloudStatus(`Failed: ${result.error}`, false);
+    }
+  });
 }
 
 // Apply loaded sensitivity

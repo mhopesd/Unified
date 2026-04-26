@@ -1,0 +1,11 @@
+name = "unified-marketplace"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# Bind a D1 database. After running:
+#   wrangler d1 create unified-marketplace
+# paste the returned database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "unified-marketplace"
+database_id = "30ae1d5f-e01b-4c37-bd31-10110b4d0ff4"

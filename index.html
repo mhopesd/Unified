@@ -596,6 +596,14 @@
       <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
       <div class="api-key-status missing" id="api-key-status">No key set — using keyword fallback.</div>
       <div class="api-key-hint">Stored locally in your browser. Get a key at console.anthropic.com.</div>
+
+      <label>Marketplace API URL <span style="color:#666;font-weight:normal;">(cross-player missions)</span></label>
+      <input type="text" id="cloud-url-input" placeholder="https://unified-marketplace.your.workers.dev" autocomplete="off" spellcheck="false">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button id="cloud-test-btn" style="padding:4px 10px;background:#222;color:#4ae04a;border:1px solid #1a3a1a;border-radius:3px;font-family:'Courier New',monospace;font-size:10px;cursor:pointer;">Test</button>
+        <div class="api-key-status missing" id="cloud-status" style="flex:1;">Offline — using local-only marketplace.</div>
+      </div>
+      <div class="api-key-hint">Leave blank for solo play. Otherwise paste your deployed Worker URL.</div>
     </div>
     <div class="pause-version">Unified v0.1.0</div>
   </div>
