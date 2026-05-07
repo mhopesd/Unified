@@ -625,7 +625,7 @@ aiTerminal.onSpawnNPCs = (config) => {
 
 // --- Minimap ---
 setLoadProgress(80, 'Baking minimap...');
-const minimap = new Minimap(WORLD_COLS, WORLD_ROWS, 150);
+const minimap = new Minimap(WORLD_COLS, WORLD_ROWS, 340);
 minimap.bake(worldMap);
 
 // --- Game state ---
@@ -2016,13 +2016,13 @@ function render() {
   }
 
   if (interactPrompt && !inVehicle) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.font = '14px monospace';
-    const tw = ctx.measureText(interactPrompt).width + 20;
-    ctx.fillRect(CANVAS_W / 2 - tw / 2, CANVAS_H - 120, tw, 24);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.font = 'bold 28px monospace';
+    const tw = ctx.measureText(interactPrompt).width + 40;
+    ctx.fillRect(CANVAS_W / 2 - tw / 2, CANVAS_H - 175, tw, 46);
     ctx.fillStyle = '#ffd700';
     ctx.textAlign = 'center';
-    ctx.fillText(interactPrompt, CANVAS_W / 2, CANVAS_H - 102);
+    ctx.fillText(interactPrompt, CANVAS_W / 2, CANVAS_H - 143);
     ctx.textAlign = 'left';
   }
 
